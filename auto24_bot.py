@@ -1,39 +1,48 @@
 import requests
 from bs4 import BeautifulSoup
+import time
+import telegram
 
-AUTO24_URL = 'https://www.auto24.ee/kasutatud/nimekiri.php?ae=1&ak=0'
+# Set up your Telegram bot
+bot_token = '6489915608:AAFxCr4yNb5DyicAZNnnywvE0U3HfFAy7BM'
+chat_id = '2021133565'
+bot = telegram.Bot(token=bot_token)
 
-# Example of previous listings (for illustration purposes)
-previous_listings = []
+# URL of the car listings page
+url = 'https://www.auto24.ee/kasutatud/nimekiri.php?bn=2&a=101102&ae=1&af=50&otsi=otsi&ak=0'
 
-def scrape_auto24():
-    response = requests.get(AUTO24_URL)
-    if response.status_code == 200:
-        soup = BeautifulSoup(response.content, 'html.parser')
-        listings = soup.find_all('div', class_='row nimekiri-kandet')
+# Keep track of already seen listings to avoid duplicates
+seen_listings = set()
 
-        new_listings = []
-        for listing in listings:
-            title_element = listing.find('div', class_='make_model_text')
-            price_element = listing.find('div', class_='hinta_text')
+def get_new_listings():
+    response = requests.get(url)
+    soup = BeautifulSoup(response.content, 'html.parser')
+    listings = soup.find_all('div', class_='result-row')
 
-            if title_element and price_element:
-                title = title_element.get_text().strip()
-                price = price_element.get_text().strip()
-                new_listings.append({'title': title, 'price': price})
+    new_listings = []
+    for listing in listings:
+        listing_id = listing['id']
+        if listing_id not in seen_listings:
+            new_listings.append(listing)
+            seen_listings.add(listing_id)
+    return new_listings
+    print("Returning new listings...")
 
-        # Compare new_listings with previous_listings
-        new_listings_to_send = []
-        for new_listing in new_listings:
-            if new_listing not in previous_listings:
-                new_listings_to_send.append(new_listing)
-                # Add new_listing to previous_listings
-                previous_listings.append(new_listing)
+def send_telegram_message(message):
+    bot.send_message(chat_id=chat_id, text=message)
+    print("Sending Telegram message...")
 
-        return new_listings_to_send
+def main():
+    while True:
+        new_listings = get_new_listings()
+        if new_listings:
+            message = "New car listings:\n"
+            for idx, listing in enumerate(new_listings, start=1):
+                link = listing.find('a', class_='h2')['href']
+                message += f"{idx}. {link}\n"
+            send_telegram_message(message)
+        time.sleep(30)
+        print("Waited for 30 seconds...")
 
 if __name__ == '__main__':
-    new_listings = scrape_auto24()
-    if new_listings:
-        for listing in new_listings:
-            print(f"New listing: {listing['title']} - {listing['price']}")
+    main()
